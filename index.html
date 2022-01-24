@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -11,6 +12,7 @@
             padding: 0;
             background-color: red;
         }
+
         canvas {
             display: block;
             position: absolute;
@@ -21,18 +23,237 @@
         }
     </style>
 </head>
+
 <body>
     <canvas id="canvas" />
 
     <script>
+        let SHOW_RANGE = false;
+        const SPEED = 1.5
+
+        const COHESION_STRENGTH = 0.007
+        const ALIGNEMENT_STRENGTH = 0.007
+        const SEPARATION_STRENGTH = 0.03
+
+        const BIRD_COUNT = 200
+        const BIRD_SIZE = 0.1
+
+        const DETECTION_RANGE = 1500 * BIRD_SIZE
+        const AVOIDANCE_RANGE = 500 * BIRD_SIZE
+
+        // Window padding to avoid birds clipping at the edge of the screen
+        const WINDOW_PADDING = 20
+
+        function random(min, max) {
+            return Math.random() * (max - min) + min;
+        }
+
+        function magnitude(vector) {
+            return Math.sqrt(vector.x * vector.x + vector.y * vector.y);
+        }
+
+        function normalize(vector) {
+            const m = magnitude(vector);
+            return { x: vector.x /= m, y: vector.y /= m }
+        }
+
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
 
         const width = canvas.width = window.innerWidth;
         const height = canvas.height = window.innerHeight;
 
-        ctx.fillStyle = '#7EAAFF';
-        ctx.fillRect(0, 0, width, height);
+        const p = new Path2D('M-144.9,131.42c7.39-40.15,17.57-84.72,25.27-125.67,1.28-7,.25-14.86-1.29-22-7.92-36.54-16.35-73-24.59-109.45-1.47-6.54-3.82-13.36,2.74-18.59,6.34-5.07,12.38-1.58,18.25,1.32Q5.89-78.25,136.55-14.07a36.62,36.62,0,0,1,7.25,4.31c5.9,4.85,5.44,13.25-.84,17.64C54.34,53.41-35.81,96.2-123.8,143-133.82,148.8-145,146.7-144.9,131.42Z')
+
+
+        class Bird {
+
+            constructor(id) {
+                this.id = id
+                this.position = { x: random(0, width), y: random(0, height) };
+                this.direction = normalize({ x: random(-1, 1), y: random(-1, 1) });
+            }
+
+            draw() {
+                ctx.save()
+                ctx.fillStyle = '#FFF'
+                ctx.translate(this.position.x, this.position.y)
+
+                const angle = Math.atan2(this.direction.y, this.direction.x)
+
+                if (SHOW_RANGE) {
+                    ctx.save()
+
+                    ctx.globalAlpha = 0.1
+
+                    ctx.beginPath()
+                    ctx.strokeStyle = 'red'
+                    ctx.arc(0, 0, AVOIDANCE_RANGE, 0, Math.PI * 2, true)
+                    ctx.stroke()
+                    ctx.closePath()
+
+                    ctx.strokeStyle = '#FFF'
+                    ctx.beginPath()
+                    ctx.rotate(angle + (Math.PI / 2))
+                    ctx.arc(0, 0, DETECTION_RANGE, 0, Math.PI, true)
+                    ctx.lineTo(DETECTION_RANGE, 0)
+                    ctx.stroke()
+                    ctx.closePath()
+
+                    ctx.restore()
+                }
+                ctx.scale(BIRD_SIZE, BIRD_SIZE)
+                ctx.rotate(angle)
+                ctx.fill(p)
+                ctx.restore()
+            }
+        }
+
+        const birds = []
+
+        function init() {
+
+            for (let i = 0; i < BIRD_COUNT; i++) {
+                birds.push(new Bird(i))
+            }
+
+            window.requestAnimationFrame(update)
+        }
+
+        function update() {
+            ctx.clearRect(0, 0, width, height)
+
+            ctx.fillStyle = '#7EAAFF'
+            ctx.fillRect(0, 0, width, height)
+
+            birds.forEach(bird => {
+
+                const flockNeighbors = []
+                const nearNeighbors = []
+
+                // Finding bird's neighbors
+                birds.forEach(other => {
+                    if (other.id !== bird.id) {
+                        const distance = magnitude({
+                            x: other.position.x - bird.position.x,
+                            y: other.position.y - bird.position.y
+                        })
+
+
+
+                        // To make the simulation more realistic, we will only consider birds directly in front of the bird
+                        const diffPosition = {
+                            x: other.position.x - bird.position.x,
+                            y: other.position.y - bird.position.y
+                        }
+
+                        // the dot product of 2 unit vectors "facing the same direction" is between 0 and 1
+                        // We can use this to determine if the other bird is in front of this bird
+
+                        const dotProduct = (diffPosition.x * bird.direction.x + diffPosition.y * bird.direction.y)
+                        if (distance < DETECTION_RANGE) {
+                            if (dotProduct > 0) {
+                                flockNeighbors.push(other)
+                            }
+                            if (distance < AVOIDANCE_RANGE) {
+                                nearNeighbors.push(other)
+                            }
+                        }
+                    }
+                })
+
+                if (flockNeighbors.length > 0) {
+
+                    const averageFlockPos = { x: 0, y: 0 }
+                    const averageFlockDir = { x: 0, y: 0 }
+
+                    flockNeighbors.forEach(other => {
+                        averageFlockPos.x += other.position.x
+                        averageFlockPos.y += other.position.y
+                        averageFlockDir.x += other.direction.x
+                        averageFlockDir.y += other.direction.y
+                    })
+
+                    // COHESION
+                    // Have each unit steer toward the average position of its neighbors.
+
+                    averageFlockPos.x /= flockNeighbors.length
+                    averageFlockPos.y /= flockNeighbors.length
+
+                    const flockVector = normalize({
+                        x: averageFlockPos.x - bird.position.x,
+                        y: averageFlockPos.y - bird.position.y
+                    })
+
+                    bird.direction = normalize({
+                        x: bird.direction.x + flockVector.x * COHESION_STRENGTH,
+                        y: bird.direction.y + flockVector.y * COHESION_STRENGTH
+                    })
+
+
+                    // ALIGNMENT
+                    // Have each unit steer so as to align itself to the average heading of its neighbors.
+
+                    averageFlockDir.x /= flockNeighbors.length
+                    averageFlockDir.y /= flockNeighbors.length
+
+                    bird.direction = normalize({
+                        x: bird.direction.x + averageFlockDir.x * ALIGNEMENT_STRENGTH,
+                        y: bird.direction.y + averageFlockDir.y * ALIGNEMENT_STRENGTH
+                    })
+
+                }
+
+                if (nearNeighbors.length > 0) {
+                    // SEPARATION
+                    // Have each unit steer to avoid hitting its neighbors.
+
+                    const averageNearPos = { x: 0, y: 0 }
+
+                    nearNeighbors.forEach(other => {
+                        averageNearPos.x += other.position.x
+                        averageNearPos.y += other.position.y
+                    })
+
+                    averageNearPos.x /= nearNeighbors.length
+                    averageNearPos.y /= nearNeighbors.length
+
+                    const nearVector = normalize({
+                        x: bird.position.x - averageNearPos.x,
+                        y: bird.position.y - averageNearPos.y
+                    })
+
+                    bird.direction = normalize({
+                        x: bird.direction.x + nearVector.x * SEPARATION_STRENGTH,
+                        y: bird.direction.y + nearVector.y * SEPARATION_STRENGTH
+                    })
+
+                }
+
+
+                bird.position.x = bird.position.x + bird.direction.x * SPEED;
+                bird.position.y = bird.position.y + bird.direction.y * SPEED;
+
+                if (bird.position.x > width + WINDOW_PADDING) {
+                    bird.position.x = -WINDOW_PADDING;
+                } else if (bird.position.x < -WINDOW_PADDING) {
+                    bird.position.x = width + WINDOW_PADDING;
+                }
+
+                if (bird.position.y > height + WINDOW_PADDING) {
+                    bird.position.y = -WINDOW_PADDING;
+                } else if (bird.position.y < -WINDOW_PADDING) {
+                    bird.position.y = height + WINDOW_PADDING;
+                }
+
+                bird.draw()
+            });
+
+            window.requestAnimationFrame(update)
+        }
+
+        init()
     </script>
 </body>
+
 </html>
