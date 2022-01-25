@@ -6,11 +6,12 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Flocking</title>
+    <meta name="description" content="A flocking example with a simple HTML5 canvas.">
     <style>
         body {
             margin: 0;
             padding: 0;
-            background-color: red;
+            background-color: #7EAAFF;
         }
 
         canvas {
@@ -31,9 +32,9 @@
         let SHOW_RANGE = false;
         const SPEED = 1.5
 
-        const COHESION_STRENGTH = 0.007
-        const ALIGNEMENT_STRENGTH = 0.007
-        const SEPARATION_STRENGTH = 0.03
+        const COHESION_STRENGTH = 0.01
+        const ALIGNEMENT_STRENGTH = 0.01
+        const SEPARATION_STRENGTH = 0.025
 
         const BIRD_COUNT = 200
         const BIRD_SIZE = 0.1
@@ -60,8 +61,8 @@
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
 
-        const width = canvas.width = window.innerWidth;
-        const height = canvas.height = window.innerHeight;
+        let width = canvas.width = window.innerWidth;
+        let height = canvas.height = window.innerHeight;
 
         const p = new Path2D('M-144.9,131.42c7.39-40.15,17.57-84.72,25.27-125.67,1.28-7,.25-14.86-1.29-22-7.92-36.54-16.35-73-24.59-109.45-1.47-6.54-3.82-13.36,2.74-18.59,6.34-5.07,12.38-1.58,18.25,1.32Q5.89-78.25,136.55-14.07a36.62,36.62,0,0,1,7.25,4.31c5.9,4.85,5.44,13.25-.84,17.64C54.34,53.41-35.81,96.2-123.8,143-133.82,148.8-145,146.7-144.9,131.42Z')
 
@@ -110,6 +111,13 @@
         }
 
         const birds = []
+
+        window.onresize = () => {
+            width = canvas.width = window.innerWidth
+            height = canvas.height = window.innerHeight
+
+            ctx.clearRect(0, 0, width, height)
+        }
 
         function init() {
 
